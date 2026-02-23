@@ -1,0 +1,16 @@
+# API Gateway Requirements
+fastapi>=0.104.0
+uvicorn>=0.24.0
+httpx>=0.25.0
+
+# PyTorch + Transformers (with 4-bit support)
+torch>=2.0.0
+transformers>=4.35.0
+accelerate>=0.24.0
+bitsandbytes>=0.41.0
+
+# Fix #2: Outlines for structured generation
+outlines>=0.0.46
+
+# Pydantic
+pydantic>=2.5.0

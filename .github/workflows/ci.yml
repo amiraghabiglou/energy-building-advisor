@@ -1,0 +1,54 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-verify:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+        cache: 'pip'
+
+    - name: Install Training Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        # Install only what is needed for the offline training script
+        pip install pandas xgboost scikit-learn openpyxl
+
+    - name: Execute Offline Model Training
+      run: |
+        # This will download the UCI data, train the models, and generate models/xgboost_model.pkl
+        # If the R2 score drops or data is unavailable, this step will fail, halting the build.
+        python scripts/train_model.py
+
+    - name: Verify Artifact Generation
+      run: |
+        if [ ! -f "models/xgboost_model.pkl" ]; then
+          echo "CRITICAL: xgboost_model.pkl was not generated."
+          exit 1
+        fi
+        echo "Artifact verified successfully."
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build Docker Containers (Dry Run)
+      run: |
+        # Verifies that both Dockerfiles compile successfully with the generated artifact
+        docker-compose build
+
+    - name: Verify API Gateway Build Context
+      run: |
+        # Ensures the API gateway successfully copied the shared schemas without ML bloat
+        docker run --rm energy-building-advisor-api python -c "from src.energy_advisor.schemas import BuildingFeatures"
