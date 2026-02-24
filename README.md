@@ -1,120 +1,95 @@
-# Energy Advisor v3 - Production Corrected
+# Energy-Efficient Building Design Advisor
 
-This version addresses all critical architectural flaws identified in code review.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![CI/CD](https://github.com/amiraghabiglou/energy-building-advisor/actions/workflows/ci.yml/badge.svg)](https://github.com/amiraghabiglou/energy-building-advisor/actions)
 
-## Critical Fixes Applied
+A production-ready microservice architecture that provides energy efficiency analysis and natural language recommendations for building designs. 
 
-### Fix #1: ASGI Event Loop Blocking
+This project demonstrates a novel **two-stage hybrid ML pipeline**, combining the raw predictive accuracy of Gradient Boosted Trees with the reasoning and formatting capabilities of a Small Language Model (SLM).
 
-**Problem**: Running `model.generate()` (PyTorch) directly in `async def` route blocks the entire event loop, preventing concurrent requests and causing health check timeouts.
+## Concept & Architecture
 
-**Solution**: Use `run_in_threadpool` from `fastapi.concurrency` to offload synchronous ML operations to a separate thread pool.
+Applying SLMs directly to tabular regression tasks often leads to catastrophic overfitting or severe hallucination. To solve this, the pipeline is strictly decoupled:
 
-```python
-# WRONG - Blocks event loop
-@app.post("/analyze")
-async def analyze(features):
-    result = model.generate(...)  # Blocks for 120ms!
-    return result
+1. **Stage 1 (Numerical Regression):** An isolated XGBoost microservice trained on the [UCI Energy Efficiency Dataset](https://archive.ics.uci.edu/ml/datasets/energy+efficiency). It interprets 8 architectural features (compactness, surface area, glazing, etc.) to precisely predict heating and cooling loads.
+2. **Stage 2 (SLM Reasoning):** An API Gateway orchestrates the results from Stage 1 into a dynamic prompt for **TinyLlama (1.1B)**. Using the **Outlines** library, the SLM's output is strictly constrained to a predefined JSON schema at the token level, guaranteeing 100% valid, structured recommendations without parsing errors.
 
-# CORRECT - Non-blocking
-@app.post("/analyze")
-async def analyze(features):
-    result = await run_in_threadpool(model.generate, ...)  # Other requests proceed
-    return result
-```
-
-**References**:
-- FastAPI docs: https://fastapi.tiangolo.com/async/ [^45^]
-- Thread pool for ML: https://apxml.com/courses/fastapi-ml-deployment/ [^42^]
-
-### Fix #2: JSON Generation Reliability
-
-**Problem**: TinyLlama 1.1B produces malformed JSON in zero-shot scenarios (missing commas, extra brackets, markdown wrapping). Regex extraction `re.search(r'\{.*\}', response)` fails frequently.
-
-**Solution**: Use **Outlines** library for structured generation with JSON schema enforcement at the token level.
-
-```python
-# WRONG - Regex extraction, prone to failure
-json_match = re.search(r'\{.*\}', response)
-result = json.loads(json_match.group())  # Often raises JSONDecodeError
-
-# CORRECT - Guaranteed valid JSON via Outlines
-outlines_generator = outlines.generate.json(model, SLMOutputSchema)
-result = outlines_generator(prompt)  # Always returns valid SLMOutputSchema
-```
-
-**References**:
-- Outlines docs: https://dottxt-ai.github.io/outlines/ [^22^]
-- Structured generation guide: https://zenvanriel.nl/ai-engineer-blog/outlines-structured-generation/ [^37^]
-
-### Fix #3: DRY Principle Violation
-
-**Problem**: `BuildingFeatures`, `Recommendation`, and other schemas redefined in both `main.py` and `predictor.py`, creating maintenance overhead and drift risk.
-
-**Solution**: Single shared schema module imported by all services.
-
-```
-src/energy_advisor/schemas.py  <- Single source of truth
-├── BuildingFeatures
-├── Recommendation  
-├── SLMOutputSchema
-├── EnergyPrediction
-└── AnalysisResult
-
-services/api/main.py          <- imports from shared
-services/ml_server/predictor.py  <- imports from shared
-```
-
-## Architecture
-
-```
+```text
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│   Client        │────▶│   API Gateway    │────▶│   ML Server     │
+│   Client / UI   │────▶│   API Gateway    │────▶│   ML Server     │
 │   Request       │     │   (FastAPI)      │     │   (XGBoost)     │
 └─────────────────┘     └──────────────────┘     └─────────────────┘
                                │
-                               │ Stage 1: Async HTTP (non-blocking)
-                               │
+                               │ Orchestrates predictions & builds prompt
                                ▼
                         ┌──────────────────┐
-                        │   SLM (TinyLlama)│
+                        │   SLM Service    │
+                        │   (TinyLlama)    │
                         │   via Outlines   │
-                        │   (thread pool)  │
                         └──────────────────┘
-                               │
-                               │ Stage 2: run_in_threadpool
-                               │
+                               │ Guaranteed JSON Schema
                                ▼
                         ┌──────────────────┐
-                        │   JSON Response  │
-                        │   (guaranteed    │
-                        │    valid schema) │
+                        │ Structured Output│
+                        │ & Explanations   │
                         └──────────────────┘
 ```
 
-## Performance Characteristics
+📁 Repository Structure
+```text
+.
+├── src/
+│   └── energy_advisor/
+│       └── schemas.py              # Single source of truth for all Pydantic schemas (DRY principle)
+│
+├── services/
+│   ├── api/                        # FastAPI gateway orchestrating the SLM and thread-pool execution
+│   └── ml_server/                  # Isolated, lightweight XGBoost inference server
+│
+├── scripts/
+│   └── train_model.py              # Offline training pipeline (ensures container immutability)
+│
+├── docker/                         # Context-aware Dockerfiles for each microservice
+│
+├── models/                         # Serialized model artifacts (.pkl generated offline)
+│
+└── docker-compose.yml
+```
+# Deployment & Execution
 
-| Metric | Before (Broken) | After (Fixed) |
-|--------|-------------------|---------------|
-| Concurrent Requests | 1 (blocked) | Many (async) |
-| JSON Validity | ~60% (zero-shot) | 100% (Outlines) |
-| Health Check Timeout | Yes | No |
-| Code Duplication | High | None (DRY) |
+This repository enforces container immutability. Models are not trained at runtime; you must generate the serialized model artifacts before building the Docker images.
 
-## Running the Pipeline
+## 1. Generate Model Artifacts (Required)
 
-**1. Generate Model Artifacts (Required first step)**
-Before building the containers, you must pull the dataset and train the XGBoost models to generate the required `.pkl` artifact.
+Install the data science dependencies locally and execute the offline training script to generate the `.pkl` artifact.
+
 ```bash
 python scripts/train_model.py
 ```
-**2. Build and Launch Services**
-Once the model artifact is generated, build the isolated containers:
+Verify that models/xgboost_model.pkl has been created successfully.
+
+## 2.Build and Launch Containers
+Once the model artifact is staged, launch the isolated microservices:
+
 ```bash
 docker-compose up --build
 ```
-
-Services:
-- ML Server: http://localhost:8001 (XGBoost predictions)
-- API Gateway: http://localhost:8000 (orchestrates pipeline)
+Services Available
+API Gateway: http://localhost:8000
+API Documentation (Swagger): http://localhost:8000/docs
+ML Server (Internal): http://localhost:8001
+API Usage Example
+```bash
+curl -X POST "http://localhost:8000/analyze" \
+     -H "Content-Type: application/json" \
+     -d '{
+           "relative_compactness": 0.98,
+           "surface_area": 514.5,
+           "wall_area": 294.0,
+           "roof_area": 110.25,
+           "overall_height": 7.0,
+           "orientation": 4,
+           "glazing_area": 0.1,
+           "glazing_area_distribution": 1
+         }'
+```
