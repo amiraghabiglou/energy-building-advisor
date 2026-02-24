@@ -46,7 +46,7 @@ jobs:
     - name: Build Docker Containers (Dry Run)
       run: |
         # Verifies that both Dockerfiles compile successfully with the generated artifact
-        docker-compose build
+        docker compose build
 
     - name: Verify API Gateway Build Context
       run: |
