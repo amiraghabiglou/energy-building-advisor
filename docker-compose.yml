@@ -45,6 +45,20 @@ services:
               count: 1
               capabilities: [gpu]
 
+  ui:
+    build:
+      context: .
+      dockerfile: docker/ui/Dockerfile
+    ports:
+      - "7860:7860"
+    environment:
+      - UI_PORT=7860
+      - API_URL=http://api:8000  # Connects internally to the API container
+    depends_on:
+      - api
+    networks:
+      - energy-network
+
 networks:
   energy-network:
     driver: bridge

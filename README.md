@@ -46,6 +46,7 @@ Applying SLMs directly to tabular regression tasks often leads to catastrophic o
 │       └── schemas.py              # Single source of truth for all Pydantic schemas (DRY principle)
 │
 ├── services/
+│   ├── ui/                         # Gradio web interface 
 │   ├── api/                        # FastAPI gateway orchestrating the SLM and thread-pool execution
 │   └── ml_server/                  # Isolated, lightweight XGBoost inference server
 │
@@ -53,6 +54,9 @@ Applying SLMs directly to tabular regression tasks often leads to catastrophic o
 │   └── train_model.py              # Offline training pipeline (ensures container immutability)
 │
 ├── docker/                         # Context-aware Dockerfiles for each microservice
+│   ├── ui/
+│   ├── api/
+│   └── ml_server/
 │
 ├── models/                         # Serialized model artifacts (.pkl generated offline)
 │
@@ -78,10 +82,16 @@ Once the model artifact is staged, launch the isolated microservices:
 docker-compose up --build
 ```
 Services Available
-API Gateway: http://localhost:8000
-API Documentation (Swagger): http://localhost:8000/docs
-ML Server (Internal): http://localhost:8001
-API Usage Example
+  - Web Interface (Gradio): http://localhost:7860  (Primary User Entry Point)
+
+  - API Gateway: http://localhost:8000
+
+  - API Documentation (Swagger): http://localhost:8000/docs
+
+  - ML Server (Internal): http://localhost:8001
+
+# API Usage Example
+You can bypass the UI and call the backend directly:
 ```bash
 curl -X POST "http://localhost:8000/analyze" \
      -H "Content-Type: application/json" \
