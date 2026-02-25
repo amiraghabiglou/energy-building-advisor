@@ -3,10 +3,13 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![CI/CD](https://github.com/amiraghabiglou/energy-building-advisor/actions/workflows/ci.yml/badge.svg)](https://github.com/amiraghabiglou/energy-building-advisor/actions)
 
-A production-ready microservice architecture that provides energy efficiency analysis and natural language recommendations for building designs. 
+An AI-powered tool that analyzes the physical dimensions of a building (like height, wall area, and window size) to predict its energy footprint and provide actionable, plain-English advice on how to make it more efficient.
 
-This project demonstrates a novel **two-stage hybrid ML pipeline**, combining the raw predictive accuracy of Gradient Boosted Trees with the reasoning and formatting capabilities of a Small Language Model (SLM).
+## What Does This Do?
 
+If you input a building's architectural specifications, this system acts as a dual-brained advisor:
+1. **The Math Engine:** It instantly calculates the exact amount of energy required to heat and cool the building.
+2. **The Communications Engine:** It translates those raw numbers into practical, human-readable recommendations (e.g., "Reduce glazing area to 15% to cut cooling loads by 10%").
 ## Concept & Architecture
 
 Applying SLMs directly to tabular regression tasks often leads to catastrophic overfitting or severe hallucination. To solve this, the pipeline is strictly decoupled:
