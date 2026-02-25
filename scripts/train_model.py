@@ -7,8 +7,8 @@ production-ready artifact (.pkl) to be injected into the Docker image.
 
 import os
 import pickle
-import urllib.request
 import logging
+import requests
 import pandas as pd
 import xgboost as xgb
 from sklearn.model_selection import cross_val_score
@@ -27,12 +27,19 @@ MODEL_PATH = os.path.join(MODEL_DIR, "xgboost_model.pkl")
 
 
 def download_data() -> None:
-    """Download the dataset safely if it doesn't already exist."""
+    """Download the dataset safely using requests to avoid OS-specific SSL certificate issues."""
     os.makedirs(os.path.dirname(DATA_PATH), exist_ok=True)
+
     if not os.path.exists(DATA_PATH):
         logger.info(f"Downloading dataset from {DATA_URL}...")
         try:
-            urllib.request.urlretrieve(DATA_URL, DATA_PATH)
+            # Using requests bypasses the brittle macOS urllib certificate chain
+            response = requests.get(DATA_URL, timeout=30)
+            response.raise_for_status()  # Fails fast on 404/500 errors
+
+            with open(DATA_PATH, 'wb') as f:
+                f.write(response.content)
+
             logger.info("Download complete.")
         except Exception as e:
             logger.error(f"Failed to download data: {e}")
@@ -62,7 +69,6 @@ def train_and_evaluate() -> None:
     y_cooling = df["cooling_load"].values
 
     logger.info("Initializing XGBoost regressors...")
-    # Parameters are fixed here for immutability, ensuring consistent artifact generation.
     model_params = {
         "n_estimators": 100,
         "max_depth": 4,
@@ -82,7 +88,6 @@ def train_and_evaluate() -> None:
     logger.info(f"Heating Model R² Score: {heating_scores.mean():.4f} (+/- {heating_scores.std() * 2:.4f})")
     logger.info(f"Cooling Model R² Score: {cooling_scores.mean():.4f} (+/- {cooling_scores.std() * 2:.4f})")
 
-    # Analytical fail-safe: Do not save garbage models.
     if heating_scores.mean() < 0.90 or cooling_scores.mean() < 0.90:
         logger.warning("CRITICAL: Model performance is degraded. Review data or parameters before deploying.")
 
