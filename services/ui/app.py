@@ -7,16 +7,15 @@ import httpx
 # Route traffic to the API Gateway container via Docker's internal DNS
 API_URL = os.getenv("API_URL", "http://api:8000")
 
-
 def analyze_building(
-        relative_compactness,
-        surface_area,
-        wall_area,
-        roof_area,
-        overall_height,
-        orientation,
-        glazing_area,
-        glazing_distribution
+    relative_compactness,
+    surface_area,
+    wall_area,
+    roof_area,
+    overall_height,
+    orientation,
+    glazing_area,
+    glazing_distribution
 ):
     """Call API gateway for two-stage analysis."""
 
@@ -40,19 +39,19 @@ def analyze_building(
         response = httpx.post(f"{API_URL}/analyze", json=payload, timeout=60.0)
 
         if response.status_code != 200:
-            return f" API Error {response.status_code}: {response.text}"
+            return f"❌ API Error {response.status_code}: {response.text}"
 
         result = response.json()
 
         output = f"""## 🏢 Energy Efficiency Analysis
 
-### Predicted Energy Loads (XGBoost)
+### 📊 Predicted Energy Loads (XGBoost)
 - **Heating Load:** {result['heating_load']:.1f} kWh/m²
 - **Cooling Load:** {result['cooling_load']:.1f} kWh/m²
 - **Efficiency Score:** {result['efficiency_score']:.0f}/100
-- **Confidence:** {result['confidence'] * 100:.0f}%
+- **Confidence:** {result['confidence']*100:.0f}%
 
-### Recommendations (SLM-Generated)
+### 💡 Recommendations (SLM-Generated)
 """
 
         for i, rec in enumerate(result.get('recommendations', []), 1):
@@ -67,10 +66,9 @@ def analyze_building(
         return output
 
     except httpx.RequestError as e:
-        return f" Network Error connecting to API Gateway: {str(e)}"
+        return f"❌ Network Error connecting to API Gateway: {str(e)}"
     except Exception as e:
-        return f" Unexpected Error: {str(e)}"
-
+        return f"❌ Unexpected Error: {str(e)}"
 
 def create_ui():
     """Create Gradio interface."""
@@ -106,12 +104,11 @@ def create_ui():
         submit_btn.click(
             fn=analyze_building,
             inputs=[relative_compactness, surface_area, wall_area, roof_area,
-                    overall_height, orientation, glazing_area, glazing_distribution],
+                   overall_height, orientation, glazing_area, glazing_distribution],
             outputs=output
         )
 
     return demo
-
 
 if __name__ == "__main__":
     demo = create_ui()
